@@ -1,5 +1,5 @@
 function BlogPost() {
-	return <div>hello blogpost</div>;
+	return <div>hello! blogpost</div>;
 }
 
 export default BlogPost;
