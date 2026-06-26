@@ -44,7 +44,7 @@ export default function Footer() {
 
 			{/* Bottom bar */}
 			<div style={styles.bottomBar}>
-				<p style={styles.copyright}>© 2026 Lumière Beauty Inc.</p>
+				<p style={styles.copyright}>© 2026 Zaytaa.</p>
 				<div style={styles.socialContainer}>
 					{["Instagram", "Pinterest", "TikTok"].map((s) => (
 						<a key={s} href="#" style={styles.socialLink}>
