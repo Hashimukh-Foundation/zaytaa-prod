@@ -5,7 +5,7 @@ export default function Marquee() {
 	const { settings } = useSettings();
 
 	const raw =
-		settings.marquee_items || "Cruelty Free ✦ Vegan Certified ✦ Clean Formulas";
+		settings.marquee_items || "Free delivery all over Bangladesh";
 	// Repeat items so the scroll looks infinite
 	const items = [...raw.split(" ✦ "), ...raw.split(" ✦ ")];
 

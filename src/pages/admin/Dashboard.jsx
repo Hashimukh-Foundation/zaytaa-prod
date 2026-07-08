@@ -6,6 +6,7 @@ import AdminProducts from "./AdminProducts";
 import AdminBrands from "./AdminBrands";
 import AdminSettings from "./AdminSettings";
 import AdminOrders from "./AdminOrders";
+import AdminSkinTypes from "./AdminSkinTypes";
 
 export default function AdminDashboard() {
 	const { user, signOut } = useAuth();
@@ -80,6 +81,8 @@ export default function AdminDashboard() {
 				return <AdminSettings />;
 			case "orders":
 				return <AdminOrders />;
+			case "skintypes":
+				return <AdminSkinTypes/>;
 			default:
 				return <div>Select a tab</div>;
 		}
@@ -139,6 +142,15 @@ export default function AdminDashboard() {
 						onClick={() => setActiveTab("brands")}
 					>
 						Brands
+					</button>
+					<button
+						style={{
+							...styles.navButton,
+							...(activeTab === "skintypes" ? styles.activeTab : {}),
+						}}
+						onClick={() => setActiveTab("skintypes")}
+					>
+						Skin Types
 					</button>
 					<button
 						style={{
