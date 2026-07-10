@@ -103,7 +103,7 @@ export default function Shop() {
 				product_categories ( categories ( slug, name ) ),
 				product_skin_types ( skin_types ( slug, name ) ),
 				product_variants ( id, name, price, sale_price, stock_quantity )
-			`);
+			`).eq("is_active", true).neq("is_archived", true);
 
 			if (error) {
 				console.error("Error fetching products:", error);
