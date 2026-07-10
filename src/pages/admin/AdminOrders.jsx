@@ -6,8 +6,15 @@ export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
+
+  // State for the Verification Input (Checking SMS against DB)
   const [adminTxInputs, setAdminTxInputs] = useState({});
-  const [adminReceivedAmounts, setAdminReceivedAmounts] = useState({});
+
+  // ---> NEW: State for Editing the actual Transaction ID <---
+  const [editTxInputs, setEditTxInputs] = useState({});
+
+  // ---> NEW: State for ADDING incremental payments <---
+  const [addPaymentInputs, setAddPaymentInputs] = useState({});
 
   // Dashboard UI States
   const [activeTab, setActiveTab] = useState("All");
@@ -100,29 +107,65 @@ export default function AdminOrders() {
     }
   };
 
-  const handleUpdatePayment = async (orderId, totalAmount) => {
-    const receivedValue = adminReceivedAmounts[orderId];
-    if (receivedValue === undefined) return; // No change made
+  // ---> NEW: Function to manually save/update a missing Transaction ID <---
+  const handleUpdateTransactionId = async (orderId) => {
+    const newTxId = editTxInputs[orderId];
+    if (newTxId === undefined) return;
 
-    const receivedAmount = parseFloat(receivedValue) || 0;
-    const dueAmount = Math.max(0, totalAmount - receivedAmount);
+    const formattedTxId = newTxId.trim().toUpperCase();
 
     const { error } = await supabase
       .from("orders")
-      .update({ advance_paid: receivedAmount, due_amount: dueAmount })
+      .update({ transaction_id: formattedTxId })
       .eq("id", orderId);
 
     if (error) {
-      alert("Failed to update payment amount.");
+      alert("Failed to update Transaction ID.");
     } else {
       setOrders((prev) =>
         prev.map((order) =>
           order.id === orderId
-            ? { ...order, advance_paid: receivedAmount, due_amount: dueAmount }
+            ? { ...order, transaction_id: formattedTxId }
             : order,
         ),
       );
-      alert("Payment updated successfully!");
+      alert("Transaction ID successfully saved!");
+    }
+  };
+
+  // ---> NEW: Function to ADD incremental payments <---
+  const handleAddPayment = async (orderId, totalAmount, currentAdvance) => {
+    const amountToAddStr = addPaymentInputs[orderId];
+    if (!amountToAddStr) return; // No input
+
+    const amountToAdd = parseFloat(amountToAddStr);
+    if (isNaN(amountToAdd)) {
+      alert("Please enter a valid number");
+      return;
+    }
+
+    // Add the new input amount to the previously saved amount
+    const newAdvance = (parseFloat(currentAdvance) || 0) + amountToAdd;
+    const dueAmount = Math.max(0, totalAmount - newAdvance);
+
+    const { error } = await supabase
+      .from("orders")
+      .update({ advance_paid: newAdvance, due_amount: dueAmount })
+      .eq("id", orderId);
+
+    if (error) {
+      alert("Failed to add payment.");
+    } else {
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === orderId
+            ? { ...order, advance_paid: newAdvance, due_amount: dueAmount }
+            : order,
+        ),
+      );
+      // Clear the input field after a successful addition
+      setAddPaymentInputs((prev) => ({ ...prev, [orderId]: "" }));
+      alert(`৳${amountToAdd} successfully added to the total paid!`);
     }
   };
 
@@ -318,6 +361,8 @@ export default function AdminOrders() {
                 {orders.map((order) => {
                   const customerTx = order.transaction_id || "";
                   const adminTx = adminTxInputs[order.id] || "";
+
+                  // Update verification state
                   let verificationState = "waiting";
                   if (adminTx.length > 0) {
                     verificationState =
@@ -425,33 +470,55 @@ export default function AdminOrders() {
                                   </div>
 
                                   <div style={styles.verificationBody}>
+                                    {/* Editable Customer TrxID */}
                                     <div style={styles.txRow}>
                                       <span style={styles.grayText}>
-                                        Customer TrxID:
+                                        Order TrxID:
                                       </span>
-                                      {customerTx ? (
-                                        <strong style={styles.monoText}>
-                                          {customerTx}
-                                        </strong>
-                                      ) : (
-                                        <span
+                                      <div
+                                        style={{ display: "flex", gap: "8px" }}
+                                      >
+                                        <input
+                                          type="text"
+                                          placeholder={
+                                            customerTx || "Missing TrxID"
+                                          }
+                                          value={
+                                            editTxInputs[order.id] !== undefined
+                                              ? editTxInputs[order.id]
+                                              : order.transaction_id || ""
+                                          }
+                                          onChange={(e) =>
+                                            setEditTxInputs({
+                                              ...editTxInputs,
+                                              [order.id]: e.target.value,
+                                            })
+                                          }
                                           style={{
-                                            color: "#c94040",
-                                            fontSize: "14px",
+                                            ...styles.verifyInput,
+                                            width: "160px",
+                                            textTransform: "uppercase",
                                           }}
+                                        />
+                                        <button
+                                          onClick={() =>
+                                            handleUpdateTransactionId(order.id)
+                                          }
+                                          style={styles.saveBtn}
                                         >
-                                          No ID Provided
-                                        </span>
-                                      )}
+                                          Save
+                                        </button>
+                                      </div>
                                     </div>
 
+                                    {/* SMS Checker Tool */}
                                     <div style={styles.txRow}>
                                       <span style={styles.grayText}>
-                                        Check TrxID:
+                                        Paste SMS TrxID:
                                       </span>
                                       <input
                                         type="text"
-                                        placeholder="Paste bKash ID..."
+                                        placeholder="Verify against above..."
                                         value={adminTxInputs[order.id] || ""}
                                         onChange={(e) =>
                                           handleAdminTxInput(
@@ -484,25 +551,23 @@ export default function AdminOrders() {
                                       }}
                                     ></div>
 
+                                    {/* Incremental Add Payment Tool */}
                                     <div style={styles.txRow}>
                                       <span style={styles.grayText}>
-                                        Amount Received (৳):
+                                        Add Payment (৳):
                                       </span>
                                       <div
                                         style={{ display: "flex", gap: "8px" }}
                                       >
                                         <input
                                           type="number"
-                                          placeholder="Enter amount"
+                                          placeholder="Amount to add"
                                           value={
-                                            adminReceivedAmounts[order.id] !==
-                                            undefined
-                                              ? adminReceivedAmounts[order.id]
-                                              : order.advance_paid || 0
+                                            addPaymentInputs[order.id] || ""
                                           }
                                           onChange={(e) =>
-                                            setAdminReceivedAmounts({
-                                              ...adminReceivedAmounts,
+                                            setAddPaymentInputs({
+                                              ...addPaymentInputs,
                                               [order.id]: e.target.value,
                                             })
                                           }
@@ -513,14 +578,15 @@ export default function AdminOrders() {
                                         />
                                         <button
                                           onClick={() =>
-                                            handleUpdatePayment(
+                                            handleAddPayment(
                                               order.id,
                                               order.total_amount,
+                                              order.advance_paid,
                                             )
                                           }
                                           style={styles.saveBtn}
                                         >
-                                          Save
+                                          Add
                                         </button>
                                       </div>
                                     </div>
@@ -543,7 +609,7 @@ export default function AdminOrders() {
                                         }}
                                       >
                                         <span style={styles.grayText}>
-                                          Advance Paid:
+                                          Total Paid:
                                         </span>
                                         <strong
                                           style={{ color: "var(--green)" }}
@@ -560,7 +626,7 @@ export default function AdminOrders() {
                                         }}
                                       >
                                         <span style={styles.grayText}>
-                                          COD Due:
+                                          Amount Due:
                                         </span>
                                         <strong style={{ color: "#c2410c" }}>
                                           ৳{(order.due_amount || 0).toFixed(2)}
