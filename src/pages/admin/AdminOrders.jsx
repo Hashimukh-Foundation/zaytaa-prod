@@ -7,9 +7,8 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
 
-  // Removed the complex SMS verification state. Kept only what is needed.
   const [editTxInputs, setEditTxInputs] = useState({});
-  const [addPaymentInputs, setAddPaymentInputs] = useState({});
+  const [paymentInputs, setPaymentInputs] = useState({}); // Renamed for generic add/deduct
 
   const [activeTab, setActiveTab] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
@@ -125,17 +124,30 @@ export default function AdminOrders() {
     }
   };
 
-  const handleAddPayment = async (orderId, totalAmount, currentAdvance) => {
-    const amountToAddStr = addPaymentInputs[orderId];
-    if (!amountToAddStr) return;
+  // --- NEW: Consolidated Add/Deduct Function ---
+  const handleAdjustPayment = async (
+    orderId,
+    totalAmount,
+    currentAdvance,
+    operation,
+  ) => {
+    const amountStr = paymentInputs[orderId];
+    if (!amountStr) return;
 
-    const amountToAdd = parseFloat(amountToAddStr);
-    if (isNaN(amountToAdd)) {
-      alert("Please enter a valid number");
+    const amount = Math.abs(parseFloat(amountStr)); // Ensure positive value for math
+    if (isNaN(amount) || amount === 0) {
+      alert("Please enter a valid number greater than 0");
       return;
     }
 
-    const newAdvance = (parseFloat(currentAdvance) || 0) + amountToAdd;
+    let newAdvance = parseFloat(currentAdvance) || 0;
+
+    if (operation === "add") {
+      newAdvance += amount;
+    } else if (operation === "deduct") {
+      newAdvance = Math.max(0, newAdvance - amount); // Prevents negative total paid
+    }
+
     const dueAmount = Math.max(0, totalAmount - newAdvance);
 
     const { error } = await supabase
@@ -144,7 +156,7 @@ export default function AdminOrders() {
       .eq("id", orderId);
 
     if (error) {
-      alert("Failed to add payment.");
+      alert("Failed to adjust payment.");
     } else {
       setOrders((prev) =>
         prev.map((order) =>
@@ -153,8 +165,13 @@ export default function AdminOrders() {
             : order,
         ),
       );
-      setAddPaymentInputs((prev) => ({ ...prev, [orderId]: "" }));
-      alert(`৳${amountToAdd} successfully added to the total paid!`);
+      setPaymentInputs((prev) => ({ ...prev, [orderId]: "" }));
+
+      if (operation === "add") {
+        alert(`৳${amount} successfully added!`);
+      } else {
+        alert(`৳${amount} successfully deducted/refunded!`);
+      }
     }
   };
 
@@ -342,6 +359,7 @@ export default function AdminOrders() {
               <tbody>
                 {orders.map((order) => {
                   const customerTx = order.transaction_id || "";
+
                   const badgeStyle = getBadgeStyle(order.status);
                   const paymentBadge = getPaymentStatus(
                     order.advance_paid,
@@ -452,7 +470,7 @@ export default function AdminOrders() {
                           <td colSpan="7" style={styles.expandedCell}>
                             <div style={styles.expandedContent}>
                               <div style={styles.infoGrid}>
-                                {/* --- SIMPLIFIED PAYMENT MANAGER --- */}
+                                {/* --- PAYMENT MANAGER --- */}
                                 <div style={styles.verificationCard}>
                                   <div style={styles.verificationHeader}>
                                     <span style={styles.label}>
@@ -463,7 +481,7 @@ export default function AdminOrders() {
                                   <div style={styles.verificationBody}>
                                     <div style={styles.txRow}>
                                       <span style={styles.grayText}>
-                                        Add Received Amount (৳):
+                                        Adjust Amount (৳):
                                       </span>
                                       <div
                                         style={{ display: "flex", gap: "8px" }}
@@ -471,31 +489,43 @@ export default function AdminOrders() {
                                         <input
                                           type="number"
                                           placeholder="Amount"
-                                          value={
-                                            addPaymentInputs[order.id] || ""
-                                          }
+                                          value={paymentInputs[order.id] || ""}
                                           onChange={(e) =>
-                                            setAddPaymentInputs({
-                                              ...addPaymentInputs,
+                                            setPaymentInputs({
+                                              ...paymentInputs,
                                               [order.id]: e.target.value,
                                             })
                                           }
                                           style={{
                                             ...styles.verifyInput,
-                                            width: "120px",
+                                            width: "100px",
                                           }}
                                         />
                                         <button
                                           onClick={() =>
-                                            handleAddPayment(
+                                            handleAdjustPayment(
                                               order.id,
                                               order.total_amount,
                                               order.advance_paid,
+                                              "add",
                                             )
                                           }
                                           style={styles.saveBtn}
                                         >
-                                          Add
+                                          + Add
+                                        </button>
+                                        <button
+                                          onClick={() =>
+                                            handleAdjustPayment(
+                                              order.id,
+                                              order.total_amount,
+                                              order.advance_paid,
+                                              "deduct",
+                                            )
+                                          }
+                                          style={styles.dangerBtn}
+                                        >
+                                          - Deduct
                                         </button>
                                       </div>
                                     </div>
@@ -1015,6 +1045,18 @@ const styles = {
     padding: "10px 16px",
     background: "#2563eb",
     color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontFamily: "var(--font-sans)",
+    fontSize: "13px",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "background 0.2s",
+  },
+  dangerBtn: {
+    padding: "10px 16px",
+    background: "#fee2e2",
+    color: "#b91c1c",
     border: "none",
     borderRadius: "6px",
     fontFamily: "var(--font-sans)",
