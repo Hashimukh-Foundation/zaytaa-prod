@@ -5,7 +5,8 @@ import { Link } from "react-router-dom";
 import { bdDistricts, getThanasForDistrict } from "../data/bdLocations";
 
 export default function Checkout() {
-  const { cart, cartTotal, clearCart, removeFromCart } = useCart();
+  const { cart, cartTotal, clearCart, removeFromCart, updateQuantity } =
+    useCart();
   const [courierSettings, setCourierSettings] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -25,7 +26,6 @@ export default function Checkout() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successId, setSuccessId] = useState(null);
 
-  // Coupon State
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponMessage, setCouponMessage] = useState("");
@@ -44,7 +44,6 @@ export default function Checkout() {
     fetchCourierSettings();
   }, []);
 
-  // Math Calculations
   const shippingFee =
     formData.district === "Dhaka"
       ? Number(courierSettings?.inside_dhaka || 60)
@@ -74,7 +73,7 @@ export default function Checkout() {
   };
 
   const generateDisplayId = () =>
-    "AXIO-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+    "ZAY-" + Math.random().toString(36).substr(2, 6).toUpperCase();
 
   const handleApplyCoupon = async (e) => {
     e.preventDefault();
@@ -125,12 +124,6 @@ export default function Checkout() {
       return;
     }
 
-    if (formData.paymentMethod === "bkash" && !formData.transactionId) {
-      setErrorMsg("Please provide your bKash Transaction ID.");
-      setIsSubmitting(false);
-      return;
-    }
-
     try {
       const displayId = generateDisplayId();
       const fullAddress = `${formData.address}, ${formData.thana}, ${formData.district} - ${formData.postalCode}`;
@@ -151,8 +144,9 @@ export default function Checkout() {
         p_total: finalTotal,
         p_tx_id: formData.transactionId || null,
         p_cart_items: formattedCartItems,
-        p_advance: shippingFee,
-        p_due: cartTotal - discountAmount,
+        p_advance: 0, // Admin sets this manually now
+        p_due: finalTotal,
+        p_coupon_code: appliedCoupon ? appliedCoupon.code : null,
       });
 
       if (error) {
@@ -182,16 +176,21 @@ export default function Checkout() {
       <div style={styles.successWrapper}>
         <div style={styles.successCard}>
           <div style={styles.checkCircle}>✓</div>
-          <h2 style={styles.successTitle}>Order Confirmed</h2>
+          <h2 style={styles.successTitle}>Order Received!</h2>
           <p style={styles.successText}>
-            Thank you! Your order has been securely received.
+            Thank you! Your order has been placed successfully using Cash on
+            Delivery.
           </p>
           <div style={styles.idBox}>
-            <span style={styles.idLabel}>TRACKING ID</span>
+            <span style={styles.idLabel}>ORDER ID</span>
             <h3 style={styles.idValue}>{successId}</h3>
           </div>
           <p style={styles.successNote}>
-            Save this ID to check your shipping status.
+            <strong>What happens next?</strong>
+            <br />
+            Our team will call you shortly from{" "}
+            <strong>+880 966 679 1110</strong> to confirm your order details and
+            arrange the delivery.
           </p>
           <div style={styles.successActions}>
             <Link to="/track-order" style={styles.primaryBtn}>
@@ -225,22 +224,56 @@ export default function Checkout() {
           <div style={styles.cartItems}>
             {cart.map((item, idx) => (
               <div key={idx} style={styles.itemRow}>
-                <div style={styles.itemDetails}>
-                  <div style={styles.itemName}>{item.name}</div>
-                  <div style={styles.itemMeta}>
-                    {item.variant_name && <span>{item.variant_name}</span>}
-                    <span>Qty: {item.quantity}</span>
+                <img
+                  src={item.image || "/placeholder.jpg"}
+                  alt={item.name}
+                  style={styles.itemImage}
+                />
+
+                <div style={styles.itemDetailsWrapper}>
+                  <div style={styles.itemHeaderRow}>
+                    <div style={styles.itemName}>{item.name}</div>
+                    <div style={styles.itemPrice}>
+                      ৳{(item.price * item.quantity).toFixed(2)}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeFromCart(item.cartItemId)}
-                    style={styles.removeBtn}
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div style={styles.itemPrice}>
-                  ৳{(item.price * item.quantity).toFixed(2)}
+
+                  {item.variant_name && (
+                    <div style={styles.itemMeta}>{item.variant_name}</div>
+                  )}
+
+                  <div style={styles.itemActionsRow}>
+                    <div style={styles.qtyContainer}>
+                      <button
+                        type="button"
+                        style={styles.qtyBtn}
+                        onClick={() =>
+                          updateQuantity(item.cartItemId, item.quantity - 1)
+                        }
+                      >
+                        −
+                      </button>
+                      <span style={styles.qtyValue}>{item.quantity}</span>
+                      <button
+                        type="button"
+                        style={styles.qtyBtn}
+                        onClick={() =>
+                          updateQuantity(item.cartItemId, item.quantity + 1)
+                        }
+                        disabled={item.quantity >= item.maxStock}
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removeFromCart(item.cartItemId)}
+                      style={styles.removeBtn}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -463,7 +496,7 @@ export default function Checkout() {
             <section style={styles.stepSection}>
               <div style={styles.stepHeader}>
                 <span style={styles.stepNumber}>3</span>
-                <h2 style={styles.stepTitle}>Payment & Confirmation</h2>
+                <h2 style={styles.stepTitle}>Payment Method</h2>
               </div>
               <div style={styles.stepBody}>
                 <div
@@ -482,7 +515,7 @@ export default function Checkout() {
                       fontSize: "16px",
                     }}
                   >
-                    Payment Policy
+                    Cash on Delivery (COD)
                   </h4>
 
                   <p
@@ -494,14 +527,11 @@ export default function Checkout() {
                       lineHeight: 1.6,
                     }}
                   >
-                    To confirm your order, you can choose to pay{" "}
-                    <strong>either</strong> the delivery charge of{" "}
-                    <strong>৳{shippingFee.toFixed(2)}</strong> as an advance,{" "}
-                    <strong>or</strong> the full order amount of{" "}
-                    <strong>৳{finalTotal.toFixed(2)}</strong>. <br />
-                    <br />
-                    Any remaining balance will be collected via Cash on Delivery
-                    (COD) when your package arrives.
+                    You can place your order right now without any advance
+                    payment. Once your order is received,{" "}
+                    <strong>
+                      our team will call you to confirm the details.
+                    </strong>
                   </p>
 
                   <div
@@ -509,7 +539,7 @@ export default function Checkout() {
                       background: "#fff",
                       padding: "16px",
                       borderRadius: "8px",
-                      border: "1px dashed var(--border)",
+                      border: "1px solid var(--border)",
                       marginBottom: "20px",
                     }}
                   >
@@ -518,40 +548,36 @@ export default function Checkout() {
                         display: "block",
                         marginBottom: "8px",
                         color: "var(--ink)",
+                        fontSize: "14px",
                       }}
                     >
-                      bKash / Nagad Instructions:
+                      (Optional) Want faster delivery?
                     </strong>
-                    <ol
+                    <p
                       style={{
                         margin: 0,
-                        paddingLeft: "20px",
                         fontFamily: "var(--font-sans)",
-                        fontSize: "14px",
+                        fontSize: "13px",
                         color: "var(--stone)",
                         lineHeight: 1.6,
                       }}
                     >
-                      <li>Open your bKash or Nagad app.</li>
-                      <li>
-                        Send Money (<strong>৳{shippingFee.toFixed(2)}</strong>{" "}
-                        or <strong>৳{finalTotal.toFixed(2)}</strong>) to{" "}
-                        <strong>
-                          {courierSettings?.bkash_number || "our number"}
-                        </strong>
-                        .
-                      </li>
-                      <li>
-                        Enter the Transaction ID (TrxID) below to verify your
-                        payment.
-                      </li>
-                    </ol>
+                      You can optionally pay the courier fee (
+                      <strong>৳{shippingFee.toFixed(2)}</strong>) in advance via
+                      bKash/Nagad to{" "}
+                      <strong>
+                        {courierSettings?.bkash_number || "our number"}
+                      </strong>{" "}
+                      and enter the TrxID below. Otherwise, just leave it blank
+                      and click Complete Order!
+                    </p>
                   </div>
 
                   <div style={styles.inputGroup}>
-                    <label style={styles.label}>Transaction ID (TrxID)</label>
+                    <label style={styles.label}>
+                      Transaction ID (Optional)
+                    </label>
                     <input
-                      required
                       type="text"
                       name="transactionId"
                       value={formData.transactionId}
@@ -561,7 +587,7 @@ export default function Checkout() {
                         fontFamily: "var(--font-mono)",
                         textTransform: "uppercase",
                       }}
-                      placeholder="e.g. 9B2C8X9Y"
+                      placeholder="Leave blank for Call-to-Confirm"
                     />
                   </div>
                 </div>
@@ -590,9 +616,7 @@ export default function Checkout() {
 				.checkout-layout { display: flex; flex-direction: column; gap: 40px; }
 				.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
 				.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-				
 				input:focus, select:focus { border-color: var(--ink) !important; outline: none; }
-				
 				@media (max-width: 600px) {
 					.checkout-header { flex-direction: column; align-items: flex-start; gap: 12px; }
 					.grid2 { grid-template-columns: 1fr; }
@@ -630,7 +654,6 @@ const styles = {
 
   formSection: { display: "flex", flexDirection: "column", gap: "32px" },
 
-  // Steps UI
   stepSection: { display: "flex", flexDirection: "column", gap: "24px" },
   stepHeader: { display: "flex", alignItems: "center", gap: "16px" },
   stepNumber: {
@@ -653,7 +676,7 @@ const styles = {
     color: "var(--ink)",
     margin: 0,
   },
-  stepBody: { paddingLeft: "44px" }, // Aligns with the title text
+  stepBody: { paddingLeft: "44px" },
 
   inputGroup: {
     display: "flex",
@@ -690,69 +713,6 @@ const styles = {
     transition: "all 0.2s",
   },
 
-  // Payment Cards
-  paymentGrid: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-    marginBottom: "24px",
-  },
-  paymentCard: {
-    display: "flex",
-    flexDirection: "column",
-    padding: "20px",
-    border: "1px solid var(--border)",
-    borderRadius: "12px",
-    cursor: "pointer",
-    transition: "all 0.2s",
-    background: "#fff",
-  },
-  paymentCardActive: {
-    borderColor: "var(--ink)",
-    background: "#fafafa",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
-  },
-  paymentCardHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    marginBottom: "8px",
-  },
-  paymentCardTitle: {
-    fontFamily: "var(--font-sans)",
-    fontSize: "16px",
-    fontWeight: 600,
-    color: "var(--ink)",
-  },
-  paymentCardDesc: {
-    fontFamily: "var(--font-sans)",
-    fontSize: "13px",
-    color: "var(--stone)",
-    margin: "0 0 0 28px",
-    lineHeight: 1.4,
-  },
-  radioInput: {
-    width: "16px",
-    height: "16px",
-    accentColor: "var(--ink)",
-    margin: 0,
-    cursor: "pointer",
-  },
-
-  bkashBox: {
-    padding: "24px",
-    background: "#f8fafc",
-    borderRadius: "12px",
-    border: "1px dashed var(--border)",
-  },
-  bkashInstructions: {
-    fontFamily: "var(--font-sans)",
-    fontSize: "14px",
-    color: "var(--stone)",
-    marginBottom: "20px",
-    lineHeight: 1.6,
-  },
-
   errorBox: {
     padding: "16px 20px",
     background: "#fef2f2",
@@ -765,7 +725,6 @@ const styles = {
     marginBottom: "32px",
   },
 
-  // Summary Section
   summaryBox: {
     background: "#fafafa",
     padding: "clamp(24px, 4vw, 40px)",
@@ -777,44 +736,108 @@ const styles = {
     fontSize: "20px",
     fontWeight: 600,
     color: "var(--ink)",
-    margin: "0 0 32px 0",
+    margin: "0 0 24px 0",
   },
-
   cartItems: {
     display: "flex",
     flexDirection: "column",
-    gap: "20px",
+    gap: "24px",
     marginBottom: "32px",
-    maxHeight: "400px",
+    maxHeight: "500px",
     overflowY: "auto",
     paddingRight: "8px",
   },
   itemRow: {
     display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingBottom: "20px",
+    gap: "16px",
+    paddingBottom: "24px",
     borderBottom: "1px solid var(--border)",
   },
-  itemDetails: { display: "flex", flexDirection: "column", gap: "6px" },
+  itemImage: {
+    width: "70px",
+    height: "90px",
+    objectFit: "cover",
+    borderRadius: "6px",
+    background: "#fff",
+    border: "1px solid var(--border)",
+  },
+  itemDetailsWrapper: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  itemHeaderRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "12px",
+  },
   itemName: {
     fontFamily: "var(--font-sans)",
-    fontSize: "15px",
+    fontSize: "14px",
     fontWeight: 600,
     color: "var(--ink)",
-  },
-  itemMeta: {
-    display: "flex",
-    gap: "12px",
-    fontFamily: "var(--font-sans)",
-    fontSize: "13px",
-    color: "var(--stone)",
+    lineHeight: 1.4,
   },
   itemPrice: {
     fontFamily: "var(--font-mono)",
-    fontSize: "15px",
+    fontSize: "14px",
     fontWeight: 600,
     color: "var(--ink)",
+    whiteSpace: "nowrap",
+  },
+  itemMeta: {
+    fontFamily: "var(--font-sans)",
+    fontSize: "13px",
+    color: "var(--stone)",
+    marginTop: "4px",
+  },
+  itemActionsRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "12px",
+  },
+
+  qtyContainer: {
+    display: "inline-flex",
+    alignItems: "center",
+    border: "1px solid var(--border)",
+    borderRadius: "6px",
+    background: "#fff",
+  },
+  qtyBtn: {
+    background: "none",
+    border: "none",
+    width: "28px",
+    height: "28px",
+    cursor: "pointer",
+    color: "var(--ink)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "14px",
+    fontFamily: "var(--font-mono)",
+  },
+  qtyValue: {
+    fontFamily: "var(--font-mono)",
+    fontSize: "13px",
+    color: "var(--ink)",
+    minWidth: "24px",
+    textAlign: "center",
+    fontWeight: 600,
+  },
+
+  removeBtn: {
+    background: "none",
+    border: "none",
+    color: "var(--stone)",
+    fontSize: "12px",
+    fontFamily: "var(--font-sans)",
+    cursor: "pointer",
+    textDecoration: "underline",
+    padding: "4px",
   },
   emptyCart: {
     fontFamily: "var(--font-sans)",
@@ -824,7 +847,6 @@ const styles = {
     padding: "24px 0",
   },
 
-  // Coupon UI
   couponSection: {
     marginBottom: "32px",
     paddingBottom: "32px",
@@ -861,7 +883,6 @@ const styles = {
     fontWeight: 500,
   },
 
-  // Totals
   totalsBlock: { display: "flex", flexDirection: "column", gap: "16px" },
   totalRow: {
     display: "flex",
@@ -898,7 +919,7 @@ const styles = {
     letterSpacing: "-0.5px",
   },
 
-  submitWrapper: { marginTop: "16px", paddingLeft: "44px" }, // Aligns with the form inputs
+  submitWrapper: { marginTop: "16px", paddingLeft: "44px" },
   submitBtn: {
     width: "100%",
     padding: "18px",
@@ -913,7 +934,6 @@ const styles = {
     transition: "transform 0.1s, opacity 0.2s",
   },
 
-  // Success Screen
   successWrapper: {
     display: "flex",
     justifyContent: "center",
@@ -985,6 +1005,7 @@ const styles = {
     fontSize: "14px",
     color: "var(--stone)",
     marginBottom: "40px",
+    lineHeight: 1.6,
   },
   successActions: {
     display: "flex",
@@ -1012,16 +1033,5 @@ const styles = {
     fontFamily: "var(--font-sans)",
     fontWeight: 600,
     transition: "background 0.2s",
-  },
-  removeBtn: {
-    background: "none",
-    border: "none",
-    color: "var(--stone)",
-    fontSize: "12px",
-    fontFamily: "var(--font-sans)",
-    cursor: "pointer",
-    padding: "4px 0 0 0",
-    textAlign: "left",
-    textDecoration: "underline",
   },
 };

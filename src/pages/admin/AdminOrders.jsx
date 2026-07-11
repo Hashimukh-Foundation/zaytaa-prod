@@ -7,23 +7,16 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
 
-  // State for the Verification Input (Checking SMS against DB)
-  const [adminTxInputs, setAdminTxInputs] = useState({});
-
-  // ---> NEW: State for Editing the actual Transaction ID <---
+  // Removed the complex SMS verification state. Kept only what is needed.
   const [editTxInputs, setEditTxInputs] = useState({});
-
-  // ---> NEW: State for ADDING incremental payments <---
   const [addPaymentInputs, setAddPaymentInputs] = useState({});
 
-  // Dashboard UI States
   const [activeTab, setActiveTab] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // Pagination States
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const limit = 20;
@@ -107,7 +100,6 @@ export default function AdminOrders() {
     }
   };
 
-  // ---> NEW: Function to manually save/update a missing Transaction ID <---
   const handleUpdateTransactionId = async (orderId) => {
     const newTxId = editTxInputs[orderId];
     if (newTxId === undefined) return;
@@ -133,10 +125,9 @@ export default function AdminOrders() {
     }
   };
 
-  // ---> NEW: Function to ADD incremental payments <---
   const handleAddPayment = async (orderId, totalAmount, currentAdvance) => {
     const amountToAddStr = addPaymentInputs[orderId];
-    if (!amountToAddStr) return; // No input
+    if (!amountToAddStr) return;
 
     const amountToAdd = parseFloat(amountToAddStr);
     if (isNaN(amountToAdd)) {
@@ -144,7 +135,6 @@ export default function AdminOrders() {
       return;
     }
 
-    // Add the new input amount to the previously saved amount
     const newAdvance = (parseFloat(currentAdvance) || 0) + amountToAdd;
     const dueAmount = Math.max(0, totalAmount - newAdvance);
 
@@ -163,7 +153,6 @@ export default function AdminOrders() {
             : order,
         ),
       );
-      // Clear the input field after a successful addition
       setAddPaymentInputs((prev) => ({ ...prev, [orderId]: "" }));
       alert(`৳${amountToAdd} successfully added to the total paid!`);
     }
@@ -171,10 +160,6 @@ export default function AdminOrders() {
 
   const toggleExpand = (orderId) => {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
-  };
-
-  const handleAdminTxInput = (orderId, value) => {
-    setAdminTxInputs((prev) => ({ ...prev, [orderId]: value }));
   };
 
   const handleExport = () => {
@@ -190,10 +175,10 @@ export default function AdminOrders() {
       "Phone",
       "Email",
       "Total (BDT)",
-      "Advance Paid (BDT)",
-      "Due on Delivery (BDT)",
+      "Amount Paid (BDT)",
       "Status",
       "Transaction ID",
+      "Coupon Code",
     ];
     const csvRows = [headers.join(",")];
 
@@ -206,9 +191,9 @@ export default function AdminOrders() {
         `"${order.customer_email || ""}"`,
         order.total_amount,
         order.advance_paid || 0,
-        order.due_amount || 0,
         order.status,
         order.transaction_id || "None",
+        order.coupon_code || "None",
       ];
       csvRows.push(row.join(","));
     });
@@ -243,9 +228,10 @@ export default function AdminOrders() {
     const adv = Number(advance) || 0;
     const tot = Number(total) || 0;
     if (adv >= tot)
-      return { label: "Fully Paid", bg: "#dcfce7", color: "#166534" };
-    if (adv > 0) return { label: "Partial", bg: "#fef08a", color: "#854d0e" };
-    return { label: "Due", bg: "#fee2e2", color: "#991b1b" };
+      return { label: "Full Paid", bg: "#dcfce7", color: "#166534" };
+    if (adv > 0)
+      return { label: "Courier Paid", bg: "#fef08a", color: "#854d0e" };
+    return { label: "Unpaid", bg: "#fee2e2", color: "#991b1b" };
   };
 
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
@@ -256,7 +242,6 @@ export default function AdminOrders() {
         <h1 style={styles.title}>Orders</h1>
       </div>
 
-      {/* --- TABS --- */}
       <div style={styles.tabsContainer}>
         {["All", "Pending", "Confirmed", "Shipped", "Cancelled"].map((tab) => (
           <button
@@ -274,7 +259,6 @@ export default function AdminOrders() {
         ))}
       </div>
 
-      {/* --- SEARCH & ACTIONS --- */}
       <div style={styles.actionRow}>
         <div style={styles.searchWrapper}>
           <span style={styles.searchIcon}>🔍</span>
@@ -302,7 +286,6 @@ export default function AdminOrders() {
         </div>
       </div>
 
-      {/* --- DATE FILTER MENU --- */}
       {showFilters && (
         <div style={styles.filterPanel}>
           <div style={styles.filterGroup}>
@@ -335,7 +318,6 @@ export default function AdminOrders() {
         </div>
       )}
 
-      {/* --- MAIN TABLE --- */}
       <div style={styles.tableContainer}>
         {loading ? (
           <div style={styles.emptyState}>Loading orders...</div>
@@ -351,7 +333,7 @@ export default function AdminOrders() {
                   <th style={styles.th}>Order ID</th>
                   <th style={styles.th}>Date</th>
                   <th style={styles.th}>Customer</th>
-                  <th style={styles.th}>Total</th>
+                  <th style={styles.th}>Total & Coupon</th>
                   <th style={styles.th}>Payment</th>
                   <th style={styles.th}>Order Status</th>
                   <th style={styles.th}></th>
@@ -360,26 +342,19 @@ export default function AdminOrders() {
               <tbody>
                 {orders.map((order) => {
                   const customerTx = order.transaction_id || "";
-                  const adminTx = adminTxInputs[order.id] || "";
-
-                  // Update verification state
-                  let verificationState = "waiting";
-                  if (adminTx.length > 0) {
-                    verificationState =
-                      adminTx.trim() === customerTx.trim()
-                        ? "match"
-                        : "mismatch";
-                  }
-
                   const badgeStyle = getBadgeStyle(order.status);
                   const paymentBadge = getPaymentStatus(
                     order.advance_paid,
                     order.total_amount,
                   );
 
+                  const advance = Number(order.advance_paid) || 0;
+                  const total = Number(order.total_amount) || 0;
+                  const isCourierPaid = advance > 0;
+                  const isTotalPaid = advance >= total;
+
                   return (
                     <React.Fragment key={order.id}>
-                      {/* MAIN ROW */}
                       <tr style={styles.tr}>
                         <td style={styles.td}>
                           <span style={styles.trackingId}>
@@ -399,9 +374,36 @@ export default function AdminOrders() {
                           </span>
                         </td>
                         <td style={styles.td}>
-                          <span style={styles.primaryText}>
+                          <div style={styles.primaryText}>
                             ৳{order.total_amount.toFixed(2)}
-                          </span>
+                          </div>
+                          {order.coupon_code ? (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                display: "inline-flex",
+                                background: "#f3f4f6",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                fontFamily: "var(--font-mono)",
+                                color: "var(--ink)",
+                                fontWeight: 600,
+                              }}
+                            >
+                              🎫 {order.coupon_code}
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "11px",
+                                color: "var(--stone)",
+                              }}
+                            >
+                              No Coupon
+                            </div>
+                          )}
                         </td>
                         <td style={styles.td}>
                           <span
@@ -445,123 +447,30 @@ export default function AdminOrders() {
                         </td>
                       </tr>
 
-                      {/* EXPANDED DETAILS ROW */}
                       {expandedOrderId === order.id && (
                         <tr>
                           <td colSpan="7" style={styles.expandedCell}>
                             <div style={styles.expandedContent}>
                               <div style={styles.infoGrid}>
-                                {/* Verification & Payment Tool */}
+                                {/* --- SIMPLIFIED PAYMENT MANAGER --- */}
                                 <div style={styles.verificationCard}>
                                   <div style={styles.verificationHeader}>
                                     <span style={styles.label}>
-                                      PAYMENT VERIFICATION
+                                      MANAGE PAYMENT
                                     </span>
-                                    {verificationState === "match" && (
-                                      <span style={styles.badgeSuccess}>
-                                        ✓ MATCHED
-                                      </span>
-                                    )}
-                                    {verificationState === "mismatch" && (
-                                      <span style={styles.badgeError}>
-                                        ✕ MISMATCH
-                                      </span>
-                                    )}
                                   </div>
 
                                   <div style={styles.verificationBody}>
-                                    {/* Editable Customer TrxID */}
                                     <div style={styles.txRow}>
                                       <span style={styles.grayText}>
-                                        Order TrxID:
-                                      </span>
-                                      <div
-                                        style={{ display: "flex", gap: "8px" }}
-                                      >
-                                        <input
-                                          type="text"
-                                          placeholder={
-                                            customerTx || "Missing TrxID"
-                                          }
-                                          value={
-                                            editTxInputs[order.id] !== undefined
-                                              ? editTxInputs[order.id]
-                                              : order.transaction_id || ""
-                                          }
-                                          onChange={(e) =>
-                                            setEditTxInputs({
-                                              ...editTxInputs,
-                                              [order.id]: e.target.value,
-                                            })
-                                          }
-                                          style={{
-                                            ...styles.verifyInput,
-                                            width: "160px",
-                                            textTransform: "uppercase",
-                                          }}
-                                        />
-                                        <button
-                                          onClick={() =>
-                                            handleUpdateTransactionId(order.id)
-                                          }
-                                          style={styles.saveBtn}
-                                        >
-                                          Save
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* SMS Checker Tool */}
-                                    <div style={styles.txRow}>
-                                      <span style={styles.grayText}>
-                                        Paste SMS TrxID:
-                                      </span>
-                                      <input
-                                        type="text"
-                                        placeholder="Verify against above..."
-                                        value={adminTxInputs[order.id] || ""}
-                                        onChange={(e) =>
-                                          handleAdminTxInput(
-                                            order.id,
-                                            e.target.value,
-                                          )
-                                        }
-                                        style={{
-                                          ...styles.verifyInput,
-                                          borderColor:
-                                            verificationState === "match"
-                                              ? "var(--green)"
-                                              : verificationState === "mismatch"
-                                                ? "#c94040"
-                                                : "var(--border)",
-                                          backgroundColor:
-                                            verificationState === "match"
-                                              ? "rgba(34, 197, 94, 0.05)"
-                                              : verificationState === "mismatch"
-                                                ? "rgba(201, 64, 64, 0.05)"
-                                                : "#fff",
-                                        }}
-                                      />
-                                    </div>
-
-                                    <div
-                                      style={{
-                                        margin: "8px 0",
-                                        borderTop: "1px solid #e2e8f0",
-                                      }}
-                                    ></div>
-
-                                    {/* Incremental Add Payment Tool */}
-                                    <div style={styles.txRow}>
-                                      <span style={styles.grayText}>
-                                        Add Payment (৳):
+                                        Add Received Amount (৳):
                                       </span>
                                       <div
                                         style={{ display: "flex", gap: "8px" }}
                                       >
                                         <input
                                           type="number"
-                                          placeholder="Amount to add"
+                                          placeholder="Amount"
                                           value={
                                             addPaymentInputs[order.id] || ""
                                           }
@@ -591,7 +500,53 @@ export default function AdminOrders() {
                                       </div>
                                     </div>
 
-                                    {/* Payment Breakdown Box */}
+                                    <div style={styles.txRow}>
+                                      <span style={styles.grayText}>
+                                        Reference TrxID:
+                                      </span>
+                                      <div
+                                        style={{ display: "flex", gap: "8px" }}
+                                      >
+                                        <input
+                                          type="text"
+                                          placeholder={
+                                            customerTx || "Leave blank if none"
+                                          }
+                                          value={
+                                            editTxInputs[order.id] !== undefined
+                                              ? editTxInputs[order.id]
+                                              : order.transaction_id || ""
+                                          }
+                                          onChange={(e) =>
+                                            setEditTxInputs({
+                                              ...editTxInputs,
+                                              [order.id]: e.target.value,
+                                            })
+                                          }
+                                          style={{
+                                            ...styles.verifyInput,
+                                            width: "160px",
+                                            textTransform: "uppercase",
+                                          }}
+                                        />
+                                        <button
+                                          onClick={() =>
+                                            handleUpdateTransactionId(order.id)
+                                          }
+                                          style={styles.outlineSaveBtn}
+                                        >
+                                          Save
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        margin: "8px 0",
+                                        borderTop: "1px solid #e2e8f0",
+                                      }}
+                                    ></div>
+
                                     <div
                                       style={{
                                         marginTop: "8px",
@@ -609,11 +564,9 @@ export default function AdminOrders() {
                                         }}
                                       >
                                         <span style={styles.grayText}>
-                                          Total Paid:
+                                          Total Money Received:
                                         </span>
-                                        <strong
-                                          style={{ color: "var(--green)" }}
-                                        >
+                                        <strong style={styles.monoText}>
                                           ৳
                                           {(order.advance_paid || 0).toFixed(2)}
                                         </strong>
@@ -622,23 +575,56 @@ export default function AdminOrders() {
                                         style={{
                                           display: "flex",
                                           justifyContent: "space-between",
-                                          marginBottom: "8px",
+                                          marginBottom: "16px",
+                                          paddingBottom: "16px",
+                                          borderBottom: "1px solid #e2e8f0",
                                         }}
                                       >
                                         <span style={styles.grayText}>
-                                          Amount Due:
+                                          Courier Charge:
                                         </span>
-                                        <strong style={{ color: "#c2410c" }}>
-                                          ৳{(order.due_amount || 0).toFixed(2)}
+                                        <strong
+                                          style={{
+                                            color: isCourierPaid
+                                              ? "var(--green)"
+                                              : "#c2410c",
+                                          }}
+                                        >
+                                          {isCourierPaid ? "PAID" : "DUE"}
                                         </strong>
                                       </div>
+
+                                      {order.coupon_code && (
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            marginBottom: "16px",
+                                          }}
+                                        >
+                                          <span style={styles.grayText}>
+                                            Coupon Used:
+                                          </span>
+                                          <strong
+                                            style={{
+                                              ...styles.monoText,
+                                              color: "var(--ink)",
+                                              background: "#e5e7eb",
+                                              padding: "2px 8px",
+                                              borderRadius: "4px",
+                                              fontSize: "12px",
+                                            }}
+                                          >
+                                            {order.coupon_code}
+                                          </strong>
+                                        </div>
+                                      )}
+
                                       <div
                                         style={{
                                           display: "flex",
                                           justifyContent: "space-between",
-                                          borderTop: "1px solid #e2e8f0",
-                                          paddingTop: "8px",
-                                          marginTop: "4px",
+                                          alignItems: "center",
                                         }}
                                       >
                                         <span
@@ -647,23 +633,31 @@ export default function AdminOrders() {
                                             fontWeight: 700,
                                           }}
                                         >
-                                          Total Order Value:
+                                          Total Order Price (৳
+                                          {(order.total_amount || 0).toFixed(2)}
+                                          ):
                                         </span>
                                         <strong
                                           style={{
-                                            ...styles.primaryText,
+                                            color: isTotalPaid
+                                              ? "white"
+                                              : "#991b1b",
+                                            backgroundColor: isTotalPaid
+                                              ? "var(--green)"
+                                              : "#fee2e2",
+                                            padding: "4px 8px",
+                                            borderRadius: "4px",
+                                            fontSize: "12px",
                                             fontWeight: 700,
                                           }}
                                         >
-                                          ৳
-                                          {(order.total_amount || 0).toFixed(2)}
+                                          {isTotalPaid ? "PAID" : "DUE"}
                                         </strong>
                                       </div>
                                     </div>
                                   </div>
                                 </div>
 
-                                {/* Shipping Address */}
                                 <div style={styles.infoBlock}>
                                   <span style={styles.label}>
                                     SHIPPING DETAILS
@@ -705,7 +699,6 @@ export default function AdminOrders() {
                                 </div>
                               </div>
 
-                              {/* Detailed Items List */}
                               <div style={{ marginTop: "32px" }}>
                                 <span style={styles.label}>
                                   FULL ORDER MANIFEST
@@ -748,7 +741,6 @@ export default function AdminOrders() {
               </tbody>
             </table>
 
-            {/* PAGINATION CONTROLS */}
             <div style={styles.paginationFooter}>
               <span style={styles.grayText}>
                 Showing {orders.length} of {totalCount} orders
@@ -1031,24 +1023,17 @@ const styles = {
     cursor: "pointer",
     transition: "background 0.2s",
   },
-
-  badgeSuccess: {
-    background: "var(--green)",
-    color: "white",
-    padding: "4px 8px",
-    borderRadius: "4px",
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "0.05em",
-  },
-  badgeError: {
-    background: "#c94040",
-    color: "white",
-    padding: "4px 8px",
-    borderRadius: "4px",
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "0.05em",
+  outlineSaveBtn: {
+    padding: "10px 16px",
+    background: "white",
+    color: "#2563eb",
+    border: "1px solid #2563eb",
+    borderRadius: "6px",
+    fontFamily: "var(--font-sans)",
+    fontSize: "13px",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "background 0.2s",
   },
 
   itemsList: {

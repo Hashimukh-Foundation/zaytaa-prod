@@ -3,77 +3,90 @@ import { supabase } from "../supabaseClient";
 import { Link } from "react-router-dom";
 
 export default function TrackOrder() {
-  const [trackingId, setTrackingId] = useState("");
-  const [orderData, setOrderData] = useState(null);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [ordersList, setOrdersList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
 
-  const [newTxId, setNewTxId] = useState("");
+  const [newTxIds, setNewTxIds] = useState({});
   const [isUpdatingTx, setIsUpdatingTx] = useState(false);
-  const [txMessage, setTxMessage] = useState({ type: "", text: "" });
+  const [txMessages, setTxMessages] = useState({});
 
   const handleTrackOrder = async (e) => {
     e.preventDefault();
     setErrorMsg("");
-    setOrderData(null);
-    setTxMessage({ type: "", text: "" });
-    setNewTxId("");
+    setOrdersList([]);
+    setHasSearched(false);
+    setTxMessages({});
+    setNewTxIds({});
 
-    if (!trackingId.trim()) return;
+    if (!phoneNumber.trim()) return;
 
     setLoading(true);
 
     try {
-      const { data: order, error: orderError } = await supabase.rpc(
-        "get_tracking_details",
-        { tracking_id: trackingId.trim().toUpperCase() },
+      const { data: orders, error: orderError } = await supabase.rpc(
+        "get_orders_by_phone",
+        { p_phone: phoneNumber.trim() },
       );
 
       if (orderError) throw orderError;
 
-      if (!order) {
-        setErrorMsg(
-          "We couldn't find an order with that tracking ID. Please check it and try again.",
-        );
+      if (!orders || orders.length === 0) {
+        setErrorMsg("We couldn't find any orders with that phone number.");
       } else {
-        setOrderData(order);
+        setOrdersList(orders);
       }
+      setHasSearched(true);
     } catch (err) {
       console.error("Tracking error:", err);
-      setErrorMsg("An error occurred while looking up your order.");
+      setErrorMsg("An error occurred while looking up your orders.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateTransaction = async (e) => {
+  const handleUpdateTransaction = async (e, displayId) => {
     e.preventDefault();
-    if (!newTxId.trim() || !orderData) return;
+    const txIdToSave = newTxIds[displayId];
+    if (!txIdToSave || !txIdToSave.trim()) return;
 
     setIsUpdatingTx(true);
-    setTxMessage({ type: "", text: "" });
+    setTxMessages((prev) => ({ ...prev, [displayId]: { type: "", text: "" } }));
 
     try {
-      const formattedTxId = newTxId.trim().toUpperCase();
+      const formattedTxId = txIdToSave.trim().toUpperCase();
       const { error } = await supabase
         .from("orders")
         .update({ transaction_id: formattedTxId })
-        .eq("display_id", orderData.display_id);
+        .eq("display_id", displayId);
 
       if (error) throw error;
 
-      setOrderData((prev) => ({ ...prev, transaction_id: formattedTxId }));
-      setTxMessage({
-        type: "success",
-        text: "Transaction ID updated successfully! We will verify it shortly.",
-      });
-      setNewTxId("");
+      setOrdersList((prevOrders) =>
+        prevOrders.map((order) =>
+          order.display_id === displayId
+            ? { ...order, transaction_id: formattedTxId }
+            : order,
+        ),
+      );
+
+      setTxMessages((prev) => ({
+        ...prev,
+        [displayId]: { type: "success", text: "Transaction ID updated!" },
+      }));
+
+      setNewTxIds((prev) => ({ ...prev, [displayId]: "" }));
     } catch (err) {
       console.error("Update error:", err);
-      setTxMessage({
-        type: "error",
-        text: "Failed to update Transaction ID. Please try again.",
-      });
+      setTxMessages((prev) => ({
+        ...prev,
+        [displayId]: {
+          type: "error",
+          text: "Failed to update Transaction ID.",
+        },
+      }));
     } finally {
       setIsUpdatingTx(false);
     }
@@ -92,37 +105,23 @@ export default function TrackOrder() {
     }
   };
 
-  // Logic for Simplified Payment Statuses
-  let isCourierPaid = false;
-  let isTotalPaid = false;
-
-  if (orderData) {
-    const advance = Number(orderData.advance_paid) || 0;
-    const total = Number(orderData.total_amount) || 0;
-
-    // If ANY money is paid, courier charge is considered paid
-    isCourierPaid = advance > 0;
-    // If advance equals or exceeds total, it's fully paid
-    isTotalPaid = advance >= total;
-  }
-
   return (
     <div style={styles.pageWrapper}>
       <div style={styles.header}>
-        <h1 style={styles.title}>Track Your Order</h1>
+        <h1 style={styles.title}>Track Your Orders</h1>
         <p style={styles.bodyText}>
-          Enter your tracking ID below to check the current status of your
-          shipment.
+          Enter your phone number below to check the status of your recent
+          purchases.
         </p>
       </div>
 
       <div style={styles.searchBox}>
         <form onSubmit={handleTrackOrder} style={styles.form}>
           <input
-            type="text"
-            placeholder="e.g. AXIO-9A8B7C"
-            value={trackingId}
-            onChange={(e) => setTrackingId(e.target.value)}
+            type="tel"
+            placeholder="e.g. 017XXXXXXXX"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
             style={styles.input}
             required
           />
@@ -133,177 +132,233 @@ export default function TrackOrder() {
         {errorMsg && <div style={styles.error}>{errorMsg}</div>}
       </div>
 
-      {orderData && (
-        <div style={styles.resultCard}>
-          <div style={styles.resultHeader}>
-            <div>
-              <span style={styles.label}>ORDER ID</span>
-              <div style={styles.monoText}>{orderData.display_id}</div>
-            </div>
+      {hasSearched && ordersList.length > 0 && (
+        <div
+          style={{
+            marginBottom: "24px",
+            fontFamily: "var(--font-sans)",
+            color: "var(--stone)",
+            fontSize: "14px",
+          }}
+        >
+          Found {ordersList.length} order{ordersList.length > 1 ? "s" : ""} for
+          this number:
+        </div>
+      )}
 
-            <div style={{ textAlign: "right" }}>
-              <span style={styles.label}>ORDER STATUS</span>
-              <div
-                style={{
-                  ...styles.statusBadge,
-                  backgroundColor: getStatusColor(orderData.status),
-                  color: "white",
-                }}
-              >
-                {orderData.status.toUpperCase()}
-              </div>
-            </div>
-          </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
+        {ordersList.map((orderData) => {
+          const advance = Number(orderData.advance_paid) || 0;
+          const isPaymentReceived = advance > 0;
 
-          <div style={styles.detailsGrid}>
-            <div style={styles.detailBlock}>
-              <span style={styles.label}>SHIPPING TO</span>
-              <div style={styles.valueText}>{orderData.customer_name}</div>
-              <div style={styles.valueText}>{orderData.shipping_address}</div>
-            </div>
+          const msg = txMessages[orderData.display_id];
 
-            <div style={styles.detailBlock}>
-              <span style={styles.label}>ORDER DATE</span>
-              <div style={styles.valueText}>
-                {new Date(orderData.created_at).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </div>
-            </div>
-          </div>
+          return (
+            <div key={orderData.display_id} style={styles.resultCard}>
+              <div style={styles.resultHeader}>
+                <div>
+                  <span style={styles.label}>ORDER ID</span>
+                  <div style={styles.monoText}>{orderData.display_id}</div>
+                </div>
 
-          <div style={styles.itemsSection}>
-            <span style={styles.label}>ITEMS ORDERED</span>
-            <div style={styles.itemList}>
-              {orderData.order_items.map((item, idx) => (
-                <div key={idx} style={styles.itemRow}>
-                  <div>
-                    <div style={styles.itemName}>
-                      {item.products?.name || "Unknown Product"}
-                    </div>
-                    {item.product_variants && (
-                      <div style={styles.itemVariant}>
-                        Size: {item.product_variants.name}
-                      </div>
-                    )}
-                  </div>
-                  <div style={styles.itemPriceQty}>
-                    {item.quantity} x ৳{item.price_at_purchase.toFixed(2)}
+                <div style={{ textAlign: "right" }}>
+                  <span style={styles.label}>ORDER STATUS</span>
+                  <div
+                    style={{
+                      ...styles.statusBadge,
+                      backgroundColor: getStatusColor(orderData.status),
+                      color: "white",
+                    }}
+                  >
+                    {orderData.status.toUpperCase()}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={styles.paymentSection}>
-            <span style={styles.label}>PAYMENT INFORMATION</span>
-            <div style={styles.paymentBox}>
-              <div style={styles.currentTxRow}>
-                <span style={styles.valueText}>Customer TrxID:</span>
-                {orderData.transaction_id ? (
-                  <strong style={styles.monoText}>
-                    {orderData.transaction_id}
-                  </strong>
-                ) : (
-                  <span
-                    style={{
-                      color: "#c94040",
-                      fontWeight: 500,
-                      fontFamily: "var(--font-sans)",
-                      fontSize: "14px",
-                    }}
-                  >
-                    None Provided
-                  </span>
-                )}
               </div>
 
-              {orderData.status.toLowerCase() === "pending" && (
-                <div style={styles.updateTxContainer}>
-                  <p
-                    style={{
-                      ...styles.bodyText,
-                      fontSize: "13px",
-                      margin: "0 0 12px 0",
-                    }}
-                  >
-                    Need to add or update your payment TrxID? Enter it below.
-                  </p>
-                  <form
-                    onSubmit={handleUpdateTransaction}
-                    style={styles.txForm}
-                  >
-                    <input
-                      type="text"
-                      placeholder="Enter new bKash/Nagad TrxID"
-                      value={newTxId}
-                      onChange={(e) => setNewTxId(e.target.value)}
-                      style={styles.txInput}
-                      required
-                    />
-                    <button
-                      type="submit"
-                      disabled={isUpdatingTx}
-                      style={styles.txBtn}
-                    >
-                      {isUpdatingTx ? "..." : "Update"}
-                    </button>
-                  </form>
-                  {txMessage.text && (
-                    <div
-                      style={{
-                        marginTop: "8px",
-                        fontSize: "13px",
-                        fontFamily: "var(--font-sans)",
-                        fontWeight: 500,
-                        color:
-                          txMessage.type === "success"
-                            ? "var(--green)"
-                            : "#c94040",
-                      }}
-                    >
-                      {txMessage.text}
+              <div style={styles.detailsGrid}>
+                <div style={styles.detailBlock}>
+                  <span style={styles.label}>SHIPPING TO</span>
+                  <div style={styles.valueText}>{orderData.customer_name}</div>
+                  <div style={styles.valueText}>
+                    {orderData.shipping_address}
+                  </div>
+                </div>
+
+                <div style={styles.detailBlock}>
+                  <span style={styles.label}>ORDER DATE</span>
+                  <div style={styles.valueText}>
+                    {new Date(orderData.created_at).toLocaleDateString(
+                      "en-US",
+                      {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      },
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.itemsSection}>
+                <span style={styles.label}>ITEMS ORDERED</span>
+                <div style={styles.itemList}>
+                  {orderData.order_items.map((item, idx) => (
+                    <div key={idx} style={styles.itemRow}>
+                      <div>
+                        <div style={styles.itemName}>
+                          {item.products?.name || "Unknown Product"}
+                        </div>
+                        {item.product_variants && (
+                          <div style={styles.itemVariant}>
+                            Size: {item.product_variants.name}
+                          </div>
+                        )}
+                      </div>
+                      <div style={styles.itemPriceQty}>
+                        {item.quantity} x ৳{item.price_at_purchase.toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={styles.paymentSection}>
+                <span style={styles.label}>PAYMENT INFORMATION</span>
+                <div style={styles.paymentBox}>
+                  <div style={styles.currentTxRow}>
+                    <span style={styles.valueText}>Customer TrxID:</span>
+                    {orderData.transaction_id ? (
+                      <strong style={styles.monoText}>
+                        {orderData.transaction_id}
+                      </strong>
+                    ) : (
+                      <span
+                        style={{
+                          color: "#c94040",
+                          fontWeight: 500,
+                          fontFamily: "var(--font-sans)",
+                          fontSize: "14px",
+                        }}
+                      >
+                        None Provided
+                      </span>
+                    )}
+                  </div>
+
+                  {orderData.status.toLowerCase() === "pending" && (
+                    <div style={styles.updateTxContainer}>
+                      <p
+                        style={{
+                          ...styles.bodyText,
+                          fontSize: "13px",
+                          margin: "0 0 12px 0",
+                        }}
+                      >
+                        Need to add or update your payment TrxID? Enter it
+                        below.
+                      </p>
+                      <form
+                        onSubmit={(e) =>
+                          handleUpdateTransaction(e, orderData.display_id)
+                        }
+                        style={styles.txForm}
+                      >
+                        <input
+                          type="text"
+                          placeholder="Enter bKash/Nagad TrxID"
+                          value={newTxIds[orderData.display_id] || ""}
+                          onChange={(e) =>
+                            setNewTxIds((prev) => ({
+                              ...prev,
+                              [orderData.display_id]: e.target.value,
+                            }))
+                          }
+                          style={styles.txInput}
+                          required
+                        />
+                        <button
+                          type="submit"
+                          disabled={isUpdatingTx}
+                          style={styles.txBtn}
+                        >
+                          {isUpdatingTx ? "..." : "Update"}
+                        </button>
+                      </form>
+                      {msg && msg.text && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            fontSize: "13px",
+                            fontFamily: "var(--font-sans)",
+                            fontWeight: 500,
+                            color:
+                              msg.type === "success"
+                                ? "var(--green)"
+                                : "#c94040",
+                          }}
+                        >
+                          {msg.text}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          {/* ---> NEW: SIMPLIFIED STATUS UI <--- */}
-          <div style={styles.summaryContainer}>
-            <div style={styles.summaryRow}>
-              <span style={styles.summaryLabel}>Courier Charge</span>
-              <span
-                style={{
-                  ...styles.summaryBadge,
-                  backgroundColor: isCourierPaid ? "var(--green)" : "#fee2e2",
-                  color: isCourierPaid ? "white" : "#991b1b",
-                }}
-              >
-                {isCourierPaid ? "PAID" : "DUE"}
-              </span>
+              <div style={styles.summaryContainer}>
+                {/* ---> "Payment Received" Indicator <--- */}
+                <div style={styles.summaryRow}>
+                  <span style={styles.summaryLabel}>Payment Received?</span>
+                  <span
+                    style={{
+                      ...styles.summaryBadge,
+                      backgroundColor: isPaymentReceived
+                        ? "var(--green)"
+                        : "#fee2e2",
+                      color: isPaymentReceived ? "white" : "#991b1b",
+                    }}
+                  >
+                    {isPaymentReceived
+                      ? `YES (৳${advance.toFixed(2)})`
+                      : "NO (Pending)"}
+                  </span>
+                </div>
+
+                {orderData.coupon_code && (
+                  <div style={styles.summaryRow}>
+                    <span style={styles.summaryLabel}>Coupon Applied</span>
+                    <span
+                      style={{
+                        ...styles.summaryBadge,
+                        backgroundColor: "#e5e7eb",
+                        color: "var(--ink)",
+                      }}
+                    >
+                      {orderData.coupon_code}
+                    </span>
+                  </div>
+                )}
+
+                <div style={styles.summaryTotalRow}>
+                  <span style={styles.summaryTotalLabel}>
+                    Total Order Price
+                  </span>
+                  <span
+                    style={{
+                      ...styles.summaryBadge,
+                      fontSize: "16px",
+                      backgroundColor: "transparent",
+                      color: "var(--ink)",
+                    }}
+                  >
+                    ৳{(orderData.total_amount || 0).toFixed(2)}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div style={styles.summaryTotalRow}>
-              <span style={styles.summaryTotalLabel}>
-                Total Order Price (৳{(orderData.total_amount || 0).toFixed(2)})
-              </span>
-              <span
-                style={{
-                  ...styles.summaryBadge,
-                  fontSize: "14px",
-                  backgroundColor: isTotalPaid ? "var(--green)" : "#fee2e2",
-                  color: isTotalPaid ? "white" : "#991b1b",
-                }}
-              >
-                {isTotalPaid ? "PAID" : "DUE"}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -343,7 +398,6 @@ const styles = {
     borderRadius: "8px",
     fontFamily: "var(--font-mono)",
     fontSize: "16px",
-    textTransform: "uppercase",
     outline: "none",
     letterSpacing: "0.05em",
   },
