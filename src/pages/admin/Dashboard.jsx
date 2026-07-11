@@ -8,6 +8,7 @@ import AdminSettings from "./AdminSettings";
 import AdminOrders from "./AdminOrders";
 import AdminSkinTypes from "./AdminSkinTypes";
 import AdminCoupon from "./AdminCoupon";
+import AdminOverview from "./AdminOverview";
 
 export default function AdminDashboard() {
   const { user, signOut } = useAuth();
@@ -86,6 +87,8 @@ export default function AdminDashboard() {
         return <AdminSkinTypes />;
       case "coupon":
         return <AdminCoupon />;
+      case "revenue":
+        return <AdminOverview />;
       default:
         return <div>Select a tab</div>;
     }
@@ -127,6 +130,15 @@ export default function AdminDashboard() {
             onClick={() => setActiveTab("orders")}
           >
             Orders
+          </button>
+          <button
+            style={{
+              ...styles.navButton,
+              ...(activeTab === "revenue" ? styles.activeTab : {}),
+            }}
+            onClick={() => setActiveTab("revenue")}
+          >
+            Revenue
           </button>
           <button
             style={{
