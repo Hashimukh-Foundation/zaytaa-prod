@@ -18,45 +18,45 @@ import Checkout from "./pages/Checkout";
 import TrackOrder from "./pages/TrackOrder";
 
 function App() {
-	return (
-		<AuthProvider>
-			<CartProvider>
-				<Router>
-					<ScrollToTop />
+  return (
+    <AuthProvider>
+      <CartProvider>
+        <Router>
+          <ScrollToTop />
 
-					<Routes>
-						<Route
-							path="/*"
-							element={
-								<>
-									<Navbar />
-									<Routes>
-										<Route path="/" element={<Home />} />
-										<Route path="/shop" element={<Shop />} />
-										<Route path="/checkout" element={<Checkout />} />
-										<Route path="/track-order" element={<TrackOrder />} />
-									</Routes>
-									<Footer />
-								</>
-							}
-						/>
-						<Route path="/product/:slug" element={<ProductPage />} />
-						<Route path="/login" element={<CustomerLogin />} />
-						<Route path="/admin" element={<AdminLogin />} />
+          <Routes>
+            <Route
+              path="/*"
+              element={
+                <>
+                  <Navbar />
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/shop" element={<Shop />} />
+                    <Route path="/checkout" element={<Checkout />} />
+                    <Route path="/track-order" element={<TrackOrder />} />
+                  </Routes>
+                  <Footer />
+                </>
+              }
+            />
+            <Route path="/product/:slug" element={<ProductPage />} />
+            {/* <Route path="/login" element={<CustomerLogin />} /> */}
+            <Route path="/ajna-devn-26" element={<AdminLogin />} />
 
-						<Route
-							path="/admin/dashboard"
-							element={
-								<ProtectedRoute>
-									<AdminDashboard />
-								</ProtectedRoute>
-							}
-						/>
-					</Routes>
-				</Router>
-			</CartProvider>
-		</AuthProvider>
-	);
+            <Route
+              path="/ajna-devn-26/dashboard"
+              element={
+                <ProtectedRoute>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Router>
+      </CartProvider>
+    </AuthProvider>
+  );
 }
 
 export default App;
