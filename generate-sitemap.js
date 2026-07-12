@@ -1,8 +1,8 @@
 import fs from "fs";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabasePublishableKey = process.env.VITE_SUPABASE_ANON_KEY;
 
 const supabse = createClient(supabaseUrl, supabasePublishableKey);
 const SITE_URL = "https://www.zaytaa.com";
