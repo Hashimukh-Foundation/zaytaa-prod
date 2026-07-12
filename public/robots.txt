@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Allow: /shop
+Allow: /product/*
+Allow: /blogs
+
+
+
+
+Disallow: /ajna-devn-26
+Disallow: /ajna-devn-26/
+Disallow: /cart
+Disallow: /checkout
+Disallow: /account
+Sitemap: https://www.zaytaa.com/sitemap.xml
