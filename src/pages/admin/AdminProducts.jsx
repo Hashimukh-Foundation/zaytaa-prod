@@ -432,7 +432,7 @@ export default function AdminProducts() {
                   fetchData();
                   closeDrawer();
                   showToast(
-                    `Product successfully ৳{editingProduct ? "updated" : "created"}`,
+                    `Product successfully ${editingProduct ? "updated" : "created"}`,
                   );
                 }}
               />
@@ -545,10 +545,10 @@ function ProductForm({ initialData, categories, skinTypes, brands, onSave }) {
         .from("product_images")
         .delete()
         .eq("product_id", productId);
-      await supabase
-        .from("product_variants")
-        .delete()
-        .eq("product_id", productId);
+      // await supabase
+      //   .from("product_variants")
+      //   .delete()
+      //   .eq("product_id", productId);
 
       if (selectedCategories.length > 0)
         await supabase.from("product_categories").insert(
@@ -572,16 +572,30 @@ function ProductForm({ initialData, categories, skinTypes, brands, onSave }) {
             is_primary: i === 0,
           })),
         );
-      if (variants.length > 0)
-        await supabase.from("product_variants").insert(
-          variants.map((v) => ({
+      if (variants.length > 0) {
+        // Map the data, keeping the 'id' ONLY if it exists
+        const variantsToSave = variants.map((v) => {
+          const variantData = {
             product_id: productId,
             name: v.name,
             price: parseFloat(v.price),
             sale_price: v.sale_price ? parseFloat(v.sale_price) : null,
             stock_quantity: parseInt(v.stock_quantity, 10) || 0,
-          })),
-        );
+          };
+
+          // If the variant already has an ID from the database, attach it so Supabase updates it
+          if (v.id) {
+            variantData.id = v.id;
+          }
+
+          return variantData;
+        });
+
+        // Use UPSERT instead of INSERT
+        await supabase
+          .from("product_variants")
+          .upsert(variantsToSave, { onConflict: "id" });
+      }
     }
     setSaving(false);
     onSave();
