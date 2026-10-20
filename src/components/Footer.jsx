@@ -55,7 +55,7 @@ export default function Footer() {
               rel="noopener noreferrer"
               style={styles.developerLink}
             >
-              [Your Name/Agency]
+              ncores
             </a>
           </span>
         </p>
@@ -142,7 +142,6 @@ const styles = {
   },
   developerText: {
     marginLeft: "6px",
-    opacity: 0.8,
   },
   developerLink: {
     color: "var(--stone)",
